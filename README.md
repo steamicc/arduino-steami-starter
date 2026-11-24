@@ -41,6 +41,14 @@ Après `steami-compiler`, lancez `steami-televerser`, puis choisissez l'une des 
 - `steami-sauver "mon message"` enregistre votre travail sur GitHub.
 - En fin de séance, arrêtez le Codespace (indicateur « Codespaces » en bas à gauche, puis « Stop Current Codespace ») : un Codespace allumé consomme votre quota.
 
+## Un tuteur IA pour t'aider
+
+Dans le panneau de discussion de VS Code (**Copilot Chat**), un tuteur IA t'aide à comprendre. Il **explique**, pose des questions, t'aide à lire une erreur de compilation ou ce qu'affiche la console série, et propose des quiz. Il ne **fait pas le travail à ta place** : il n'écrit pas ton programme, ne modifie aucun fichier et ne sauvegarde pas pour toi. C'est à toi d'écrire et de lancer les commandes.
+
+- La **complétion automatique** de Copilot est désactivée exprès : seul le chat est disponible, pour que tu écrives toi-même ton code.
+- Les instructions du tuteur sont dans `AGENTS.md` et `.github/copilot-instructions.md`. Les enseignants y ajoutent le contexte de leur TP (section « Contexte du TP »).
+- Une garde (`.agents/garde-tuteur.py`) refuse les actions interdites au tuteur. Ses tests se lancent avec `python3 -m unittest discover -s tests -p 'test_*.py'`.
+
 ## Aller plus loin
 
 Documentation complète : <https://wiki.steami.cc/docs/software/arduino/codespace>
