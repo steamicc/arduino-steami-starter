@@ -1,0 +1,19 @@
+{
+    "github.copilot.enable": {
+        "*": false
+    },
+    "chat.tools.terminal.outputLocation": "terminal",
+    "chat.tools.terminal.autoApprove": {
+        "steami-exemples": true,
+        "steami-compiler": true,
+        "steami-televerser": true,
+        "/^git\\s+(status|log|diff)\\b/": true,
+        "steami-sauver": false,
+        "steami-copier": false,
+        "/^git\\s+(add|commit|push|pull|checkout|restore|reset|clean|stash|rebase|merge|tag|rm|mv)\\b/": false,
+        "rm": false,
+        "mv": false,
+        "cp": false,
+        "gh": false
+    }
+}

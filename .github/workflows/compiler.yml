@@ -14,6 +14,8 @@ jobs:
       image: ghcr.io/steamicc/arduino-steami-devcontainer:2026.11.3
     steps:
       - uses: actions/checkout@v4
+      - name: Tester la garde du tuteur IA
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Compiler le programme
         run: steami-compiler
       - name: Vérifier le binaire

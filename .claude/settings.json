@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Edit",
+      "Write",
+      "MultiEdit",
+      "NotebookEdit",
+      "Bash(steami-sauver)",
+      "Bash(steami-sauver *)",
+      "Bash(steami-copier *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git checkout *)",
+      "Bash(git restore *)",
+      "Bash(git reset *)",
+      "Bash(git clean *)",
+      "Bash(git stash *)",
+      "Bash(git rebase *)",
+      "Bash(git merge *)",
+      "Bash(git tag *)",
+      "Bash(git rm *)",
+      "Bash(git mv *)",
+      "Bash(gh *)",
+      "Bash(rm *)",
+      "Bash(mv *)",
+      "Bash(cp *)",
+      "Bash(tee *)",
+      "Bash(sed -i *)"
+    ],
+    "ask": [
+      "Bash(steami-televerser *)"
+    ],
+    "allow": [
+      "Bash(steami-exemples)",
+      "Bash(steami-exemples *)",
+      "Bash(steami-compiler)",
+      "Bash(steami-compiler *)",
+      "Bash(steami-televerser)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git diff *)"
+    ],
+    "disableBypassPermissionsMode": "disable",
+    "disableAutoMode": "disable"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PROJECT_DIR}/.agents/garde-tuteur.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
