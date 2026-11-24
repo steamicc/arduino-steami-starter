@@ -3,17 +3,38 @@ name: compiler
 on:
   push:
   pull_request:
+  # Nécessaire au suivi automatique des images : une PR ouverte avec
+  # GITHUB_TOKEN ne déclenche pas « pull_request ».
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  compiler:
+  image:
     # Sans cette condition, chaque dépôt d'élève (créé depuis ce modèle)
     # recevrait un courriel d'échec à chaque sauvegarde d'un programme en cours.
     if: github.repository == 'steamicc/arduino-steami-starter'
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/steamicc/arduino-steami-devcontainer:2026.11.4
+    outputs:
+      etiquette: ${{ steps.lire.outputs.etiquette }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # Une seule source pour la version de l'image : .devcontainer/devcontainer.json
+      # (le suivi automatique ne modifie que ce fichier : GITHUB_TOKEN ne peut pas
+      # modifier un fichier de workflow).
+      - id: lire
+        run: |
+          etiquette=$(python3 -c 'import json; print(json.load(open(".devcontainer/devcontainer.json"))["image"].rsplit(":", 1)[1])')
+          [[ "$etiquette" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]+$ ]] || { echo "✗ étiquette d'image inattendue : $etiquette"; exit 1; }
+          echo "etiquette=$etiquette" >> "$GITHUB_OUTPUT"
+  compiler:
+    needs: image
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/steamicc/arduino-steami-devcontainer:${{ needs.image.outputs.etiquette }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Tester la garde du tuteur IA
         run: python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Compiler le programme
