@@ -366,6 +366,15 @@ class ConfigurationDesAgents(unittest.TestCase):
     def test_completion_copilot_desactivee(self):
         self.assertEqual(self.charger(".vscode/settings.json")["github.copilot.enable"], {"*": False})
 
+    def test_approbation_automatique_git_refuse_output_et_accolades(self):
+        regles = self.charger(".vscode/settings.json")["chat.tools.terminal.autoApprove"]
+        motif = next(re.compile(k[1:-1]) for k, v in regles.items() if v is True and k.startswith("/^git"))
+        for commande in ["git status", "git log --oneline -n 5", "git diff --stat", "git diff src/main.cpp"]:
+            self.assertTrue(motif.search(commande), commande)
+        for commande in ["git diff --output=x", "git diff --outp=x", "git log --output x",
+                         "git diff --{output=x,stat}", "git show", "git commit -m x"]:
+            self.assertFalse(motif.search(commande), commande)
+
     def test_deny_claude_couvre_les_ecritures(self):
         deny = self.charger(".claude/settings.json")["permissions"]["deny"]
         for regle in ["Edit", "Write", "NotebookEdit", "Bash(steami-sauver)", "Bash(steami-sauver *)",
