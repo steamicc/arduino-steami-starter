@@ -37,8 +37,8 @@
     {
       "id": "exemple",
       "type": "promptString",
-      "description": "Exemple (driver/Exemple), la liste est donnée par steami-exemples",
-      "default": "lis2mdl/BasicReader"
+      "description": "Exemple (COMPOSANT/Exemple), la liste est donnée par steami-exemples",
+      "default": "LIS2MDL/BasicReader"
     }
   ]
 }

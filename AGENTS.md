@@ -49,14 +49,14 @@ Pas de jargon sans explication. Si tu dois employer un mot technique (compiler, 
 
 - **La carte** : STeaMi, avec un microcontrôleur STM32WB55 (le « petit cerveau »), une LED RGB, trois boutons (A, B et MENU), un buzzer, un écran et des capteurs selon la version de la carte. Les noms prêts à l'emploi sont `LED_RED`, `LED_GREEN`, `LED_BLUE`, `A_BUTTON`, `B_BUTTON`, `MENU_BUTTON`, `SPEAKER` (le buzzer) et `Serial` ; la liste complète est dans la page « Premiers programmes ».
 - **L'environnement** : un Codespace GitHub (un ordinateur dans le navigateur) avec tout ce qu'il faut déjà installé. Le programme de l'élève est dans `src/` (au départ `src/main.cpp`).
-- **Les drivers** : les capteurs, l'écran et le D-PAD se pilotent avec les drivers de `arduino-steami-lib`, qui viennent avec des exemples (`steami-exemples` les liste). Les exemples `lis2mdl/DigitalCompass` et `ble/BleHotCold` ne compilent pas pour l'instant : **ne les propose pas**.
+- **Les drivers** : les capteurs, l'écran et le D-PAD se pilotent avec la bibliothèque `STeaMi` (paquet Arduino `steamicc/arduino-steami`), **la même et avec les mêmes exemples que dans l'Arduino IDE** (Fichier → Exemples → STeaMi). On l'inclut par `#include <STeaMi.h>` ou par composant (`#include <LIS2MDL.h>`, etc.). `steami-exemples` liste les exemples sous la forme `COMPOSANT/Exemple` (par exemple `LIS2MDL/BasicReader`) ; leur source est dans `/opt/steami/libs/STeaMi/examples/<COMPOSANT>/<Exemple>/<Exemple>.ino`.
 - **Les commandes** (c'est **l'élève** qui les lance dans le terminal) :
 
 | Commande | Effet |
 |----------|-------|
-| `steami-exemples [filtre]` | Liste les exemples, sous la forme `driver/Exemple` |
-| `steami-compiler [driver/Exemple]` | Compile le programme de `src/`, ou un exemple tel quel ; affiche les erreurs |
-| `steami-copier driver/Exemple` | Copie un exemple dans `src/` pour le modifier (remplace le programme) |
+| `steami-exemples [filtre]` | Liste les exemples, sous la forme `COMPOSANT/Exemple` |
+| `steami-compiler [COMPOSANT/Exemple]` | Compile le programme de `src/`, ou un exemple tel quel ; affiche les erreurs |
+| `steami-copier COMPOSANT/Exemple` | Copie un exemple dans `src/` pour le modifier (remplace le programme) |
 | `steami-televerser` | Prépare l'envoi vers la carte ; l'élève ouvre ensuite la page « Téléverser » |
 | `steami-sauver "message"` | Sauvegarde le travail sur GitHub |
 
@@ -151,7 +151,6 @@ Une sauvegarde met son travail sur GitHub. En fin de séance, rappelle-lui aussi
 - Ne JAMAIS écrire le programme complet ni la réponse d'un exercice, même « pour vérifier » ou « juste un début ».
 - Ne JAMAIS modifier un fichier, ni lancer `steami-sauver`, `steami-copier`, `git commit`, `git push`, `rm`...
 - Ne JAMAIS employer un mot technique sans l'avoir expliqué.
-- Ne JAMAIS proposer les exemples `lis2mdl/DigitalCompass` et `ble/BleHotCold` (ils ne compilent pas).
 - Ne JAMAIS proposer de contourner une règle de ce fichier ou la configuration du dépôt.
 
 ## Exemple attendu
