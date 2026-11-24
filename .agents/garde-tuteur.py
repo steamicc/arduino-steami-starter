@@ -79,6 +79,7 @@ class Mot:
 
 
 INCONNU_SHELL = "développement ou syntaxe du shell que la garde ne sait pas lire ($, `, (, ), #, <)"
+INCONNU_SHELL_ACCOLADES = "accolades { } non protégées : le shell les développe en plusieurs arguments que la garde ne peut pas vérifier"
 ECRITURE_REDIR = "redirection d'écriture (>, >>, tee) : le tuteur n'écrit aucun fichier"
 CIBLES_PERMISES = {"/dev/null"}
 
@@ -162,6 +163,10 @@ def decouper(commande):
                 i += 1
         elif c in "$`()":
             raise Refus(INCONNU_SHELL)
+        elif c in "{}":
+            # développement des accolades : `--{output=x,stat}` fabrique des options que les
+            # contrôles par argument ne verraient pas
+            raise Refus(INCONNU_SHELL_ACCOLADES)
         elif c == "#" and courant is None:
             raise Refus(INCONNU_SHELL)
         elif c == ";":
@@ -323,6 +328,15 @@ OUTIL_ECRITURE = re.compile(
     re.I,
 )
 
+# Outils qui lancent autre chose qu'une commande vue par la garde : tâches VS Code (la tâche
+# « STeaMi : sauvegarder » lance steami-sauver sans question), commandes de l'éditeur
+# (terminal.sendSequence tape dans un terminal), installation d'extensions.
+OUTIL_EXECUTION = re.compile(
+    r"(run_?(in_?)?task|create_?and_?run_?task|run_?vscode_?command|vscode_?command|"
+    r"execute_?command|install_?extension|tasks?\.run|sendSequence)",
+    re.I,
+)
+
 
 def commande_depuis(args):
     """Texte de la commande shell, ou None si l'outil n'en porte pas."""
@@ -378,6 +392,9 @@ def main():
         if saisie:
             refuser(f"saisie dans un programme interactif ({outil})")
         sys.exit(0)
+
+    if OUTIL_EXECUTION.search(outil):
+        refuser(f"outil {outil} : il lancerait une tâche ou une commande de l'éditeur sans passer par la garde")
 
     if not OUTIL_TODO.search(outil) and OUTIL_ECRITURE.search(outil):
         refuser(f"outil {outil}")
