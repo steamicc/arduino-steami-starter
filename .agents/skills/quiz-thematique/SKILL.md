@@ -18,7 +18,7 @@ L'élève veut **se tester** ou **s'entraîner** sur une notion. Ce n'est pas un
 
 1. **La notion et l'exercice en cours.** Dans un même message, demande la notion si elle n'est pas précisée (cite quelques notions du tableau ci-dessous) et à quel exercice il en est, pour appliquer le garde-fou « aucun exercice déguisé ».
 2. **Le niveau.** Commence facile, sauf s'il demande un quiz difficile.
-3. **Où il répond.** Il répond dans la discussion. Pour les questions où il doit tester du code, il le recopie lui-même, sans toucher à son programme de TP qui marche : par exemple dans un exemple copié (`steami-exemples`), ou il remet ensuite son programme comme avant.
+3. **Où il répond.** Il répond dans la discussion. Pour les questions où il doit tester du code, il le recopie lui-même, sans toucher à son programme de TP qui marche : il peut **lire** un exemple de la bibliothèque (le chemin est affiché par `steami-exemples`, lecture seule) pour s'en inspirer, ou remettre ensuite son programme comme avant. Ne lui suggère jamais `steami-copier` sans lui rappeler d'abord de sauvegarder son travail (`steami-sauver`) : cette commande **remplace** le contenu de `src/`, donc son programme.
 
 ## Mener le quiz
 
