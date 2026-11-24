@@ -19,11 +19,13 @@ Dans **votre** nouveau dépôt : **Code** → onglet **Codespaces** → **Create
 
 | Commande | Rôle |
 | --- | --- |
-| `steami-exemples [filtre]` | liste les exemples, sous la forme `driver/Exemple` (par exemple `steami-exemples lis2mdl`) |
-| `steami-compiler [driver/Exemple]` | compile votre programme (`src/`), ou un exemple tel quel (`steami-compiler lis2mdl/BasicReader`) |
-| `steami-copier [--remplacer] driver/Exemple` | copie un exemple dans `src/` pour le modifier |
+| `steami-exemples [filtre]` | liste les exemples, sous la forme `COMPOSANT/Exemple` (par exemple `steami-exemples LIS2MDL`) |
+| `steami-compiler [COMPOSANT/Exemple]` | compile votre programme (`src/`), ou un exemple tel quel (`steami-compiler LIS2MDL/BasicReader`) |
+| `steami-copier [--remplacer] COMPOSANT/Exemple` | copie un exemple dans `src/` pour le modifier |
 | `steami-televerser` | prépare l'envoi du programme vers la carte |
 | `steami-sauver ["message"]` | sauvegarde votre travail sur GitHub |
+
+Les drivers et les exemples sont **les mêmes que dans l'Arduino IDE** (Fichier → Exemples → STeaMi) : c'est la bibliothèque `STeaMi`, qu'on inclut par `#include <STeaMi.h>` ou par composant (`#include <LIS2MDL.h>`). Les sources des exemples sont dans `/opt/steami/libs/STeaMi/examples/<COMPOSANT>/<Exemple>/<Exemple>.ino`. Les noms ne tiennent pas compte de la casse : `steami-compiler lis2mdl/basicreader` fonctionne aussi.
 
 Ces actions existent aussi dans le menu **Terminal** → **Run Task…** (« STeaMi : compiler », etc.).
 

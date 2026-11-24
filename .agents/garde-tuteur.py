@@ -305,7 +305,7 @@ def verifier_segment(mots):
             raise Refus("steami-exemples : argument inattendu", RAISON_INCONNUE)
     elif nom == "steami-compiler":
         if len(args) > 1 or (args and args[0] not in ("-h", "--help") and not ARG_PROGRAMME.fullmatch(args[0])):
-            raise Refus("steami-compiler : seul un argument de la forme driver/Exemple est permis", RAISON_INCONNUE)
+            raise Refus("steami-compiler : seul un argument de la forme COMPOSANT/Exemple est permis", RAISON_INCONNUE)
     elif nom == "steami-televerser":
         if args and args not in (["-h"], ["--help"]):
             raise Refus("steami-televerser : aucun argument permis", RAISON_INCONNUE)

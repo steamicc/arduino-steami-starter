@@ -117,7 +117,7 @@ class CommandesRefusees(GardeTestCase):
     REFUSEES = [
         # actions réservées à l'élève
         "steami-sauver", 'steami-sauver "mon message"',
-        "steami-copier lis2mdl/BasicReader", "steami-copier --remplacer ble/BleBeacon",
+        "steami-copier LIS2MDL/BasicReader", "steami-copier --remplacer BLE/BleBeacon",
         # git qui modifie
         'git commit -m x', "git push", "git push origin main", "git reset --hard", "git clean -fd",
         "git checkout main", "git checkout -- src/main.cpp", "git restore src/main.cpp",
@@ -194,7 +194,7 @@ class CommandesRefusees(GardeTestCase):
 
     def test_raisons_en_francais_pour_le_tuteur(self):
         self.assertRefuse(bash("steami-sauver"), "steami-sauver")
-        self.assertRefuse(bash("steami-copier ble/BleBeacon"), "steami-copier")
+        self.assertRefuse(bash("steami-copier BLE/BleBeacon"), "steami-copier")
         self.assertRefuse(bash("git commit -m x"), "git")
         self.assertRefuse(bash("rm x"), "fichier")
         self.assertRefuse(bash("echo x > y"), "redirection")
@@ -219,18 +219,18 @@ class CommandesRefusees(GardeTestCase):
 
 class CommandesAutorisees(GardeTestCase):
     AUTORISEES = [
-        "ls", "ls -la", "ls src", "ls -la /opt/steami/arduino-steami-lib", "pwd",
+        "ls", "ls -la", "ls src", "ls -la /opt/steami/libs/STeaMi", "pwd",
         "cat README.md", "cat src/main.cpp", "head -n 20 src/main.cpp", "tail -n 20 src/main.cpp",
         "grep -n loop src/main.cpp", "grep -rn 'Serial' src", 'grep -rn "digitalWrite" src/',
-        "grep -r --include='*.h' begin /opt/steami/arduino-steami-lib", "grep '^#include' src/main.cpp",
+        "grep -r --include='*.h' begin /opt/steami/libs/STeaMi", "grep '^#include' src/main.cpp",
         "grep -c '$' src/main.cpp", "grep 'a|b' README.md", "wc -l src/main.cpp",
-        "find . -name '*.cpp'", "find src -type f", "find /opt/steami/arduino-steami-lib -name '*.ino'",
+        "find . -name '*.cpp'", "find src -type f", "find /opt/steami/libs/STeaMi -name '*.ino'",
         "/usr/bin/cat src/main.cpp", "/bin/ls", "/usr/bin/grep -n x y",
         "git status", "git status --short", "git log", "git log --oneline -n 5", "git diff",
         "git diff src/main.cpp", "git diff --stat", "git show HEAD", "git show HEAD:src/main.cpp",
         "git log --oneline --graph", "git blame src/main.cpp", "git ls-files",
-        "steami-exemples", "steami-exemples lis2mdl", "steami-exemples bme280",
-        "steami-compiler", "steami-compiler lis2mdl/BasicReader", "steami-compiler ble/BleBeacon",
+        "steami-exemples", "steami-exemples LIS2MDL", "steami-exemples bme280",
+        "steami-compiler", "steami-compiler LIS2MDL/BasicReader", "steami-compiler WSEN-HIDS/BasicReader", "steami-compiler BLE/BleBeacon",
         "steami-compiler --help", "steami-compiler -h", "steami-televerser", "steami-televerser --help",
         "steami-exemples | head -20", "steami-compiler 2>&1 | head -40", "steami-compiler 2>&1",
         "steami-compiler > /dev/null", "steami-compiler 2>/dev/null", "steami-compiler >/dev/null 2>&1", "steami-compiler >&/dev/null", "ls &>/dev/null",

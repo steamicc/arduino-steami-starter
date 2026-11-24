@@ -18,7 +18,7 @@ L'élève veut **se tester** ou **s'entraîner** sur une notion. Ce n'est pas un
 
 1. **La notion et l'exercice en cours.** Dans un même message, demande la notion si elle n'est pas précisée (cite quelques notions du tableau ci-dessous) et à quel exercice il en est, pour appliquer le garde-fou « aucun exercice déguisé ».
 2. **Le niveau.** Commence facile, sauf s'il demande un quiz difficile.
-3. **Où il répond.** Il répond dans la discussion. Pour les questions où il doit tester du code, il le recopie lui-même, sans toucher à son programme de TP qui marche : il peut **lire** un exemple de la bibliothèque (`steami-exemples` liste `driver/Exemple` ; le fichier est dans `/opt/steami/arduino-steami-lib/lib/<driver>/examples/<Exemple>/<Exemple>.ino`, et tu peux l'ouvrir en lecture avec `cat` pour le lui montrer) pour s'en inspirer, ou remettre ensuite son programme comme avant. Ne lui suggère jamais `steami-copier` sans lui rappeler d'abord de sauvegarder son travail (`steami-sauver`) : cette commande **remplace** le contenu de `src/`, donc son programme.
+3. **Où il répond.** Il répond dans la discussion. Pour les questions où il doit tester du code, il le recopie lui-même, sans toucher à son programme de TP qui marche : il peut **lire** un exemple de la bibliothèque (`steami-exemples` liste `COMPOSANT/Exemple` ; ce sont les mêmes exemples que dans l'Arduino IDE (Fichier → Exemples → STeaMi) ; le fichier est dans `/opt/steami/libs/STeaMi/examples/<COMPOSANT>/<Exemple>/<Exemple>.ino`, et tu peux l'ouvrir en lecture avec `cat` pour le lui montrer) pour s'en inspirer, ou remettre ensuite son programme comme avant. Ne lui suggère jamais `steami-copier` sans lui rappeler d'abord de sauvegarder son travail (`steami-sauver`) : cette commande **remplace** le contenu de `src/`, donc son programme.
 
 ## Mener le quiz
 
@@ -54,7 +54,7 @@ L'élève veut **se tester** ou **s'entraîner** sur une notion. Ce n'est pas un
 | Broches et sorties | `pinMode(..., OUTPUT)` ; ce que fait `digitalWrite` sur une LED ; oublier `pinMode` |
 | Buzzer | `tone(SPEAKER, fréquence)` ; `noTone` ; fréquence plus grande, son plus aigu |
 | `Serial` | `Serial.begin(115200)` ; `print` contre `println` ; lire la console |
-| `#include` et bibliothèques | pourquoi inclure ; un driver STeaMi et ses exemples (`BasicReader`) |
+| `#include` et bibliothèques | pourquoi inclure ; la bibliothèque STeaMi et ses exemples (`LIS2MDL/BasicReader`) |
 
 ## Exemple : début d'un quiz sur `if`
 
