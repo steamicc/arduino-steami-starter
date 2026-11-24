@@ -6,7 +6,9 @@ L'assistant est un tuteur : il lit, explique, aide à comprendre une erreur et p
 quiz, mais il ne modifie aucun fichier et ne lance pas à la place de l'élève les commandes
 qui sauvegardent son travail. La garde :
 
-  - refuse tout outil d'écriture de fichier (Edit, Write, apply_patch, create_file...) ;
+  - n'autorise que des outils connus, en lecture seule (liste blanche OUTILS_LECTURE : Read,
+    Grep, Glob, read_file, grep_search, get_errors, fetch_webpage...) ; tout autre outil, y
+    compris un outil écrit demain, est refusé ;
   - en shell, n'autorise que des commandes connues, en lecture : ls, cat, head, tail, grep,
     wc, find (sans action), git status/log/diff/show, steami-exemples, steami-compiler,
     steami-televerser. Tout le reste est refusé, avec une raison adaptée pour les
@@ -14,8 +16,9 @@ qui sauvegardent son travail. La garde :
     (python, bash -c, xargs, env...) ou qui sont réservées à l'élève (steami-sauver,
     steami-copier, git commit/push...).
 
-C'est une liste d'autorisations : en cas de doute (syntaxe shell qu'on ne sait pas lire,
-développement $VAR ou $(...), commande inconnue), la garde refuse. Ce n'est pas un coffre-fort
+C'est une liste d'autorisations, pour les outils comme pour les commandes : en cas de doute
+(outil inconnu, syntaxe shell qu'on ne sait pas lire, développement $VAR ou $(...), commande
+inconnue), la garde refuse. Ce n'est pas un coffre-fort
 (l'élève peut tout faire lui-même dans son terminal) : c'est un garde-fou contre un tuteur
 qui écrirait le programme à la place de l'élève.
 
@@ -220,7 +223,7 @@ DOSSIERS_SYSTEME = {"/usr/bin", "/bin", "/usr/local/bin", "/usr/sbin", "/sbin"}
 ECRIT_FICHIERS = {
     "rm", "rmdir", "mv", "cp", "ln", "touch", "mkdir", "chmod", "chown", "chgrp", "truncate", "dd",
     "install", "rsync", "tee", "sed", "patch", "ed", "ex", "vi", "vim", "nano", "emacs", "code",
-    "unzip", "tar", "zip", "cpio", "shred", "mktemp", "mkfifo", "tar", "gzip", "gunzip",
+    "unzip", "tar", "zip", "cpio", "shred", "mktemp", "mkfifo", "gzip", "gunzip",
 }
 CODE_ARBITRAIRE = {
     "node", "deno", "bun", "perl", "ruby", "php", "lua", "awk", "gawk", "bash", "sh", "zsh", "dash",
@@ -235,6 +238,12 @@ GIT_LECTURE = {"status", "log", "diff", "show", "blame", "ls-files"}
 
 ARG_EXEMPLE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./+-]*")
 ARG_PROGRAMME = re.compile(r"[A-Za-z0-9_-]+/[A-Za-z0-9_-]+")
+
+
+JOKER_ARGUMENT = (
+    "joker (* ? [) non protégé dans un argument de {nom} : un fichier de ce nom deviendrait une "
+    "option (-delete, --output=...) ; mets le motif entre guillemets"
+)
 
 
 def verifier_git(args):
@@ -276,6 +285,9 @@ def verifier_segment(mots):
         raise Refus(f"{nom} : exécution de code arbitraire, d'un script ou d'une autre commande")
     if nom in RESEAU:
         raise Refus(f"{nom} : accès réseau ou téléchargement")
+
+    if nom in ("git", "find") and any(m.joker for m in mots[1:]):
+        raise Refus(JOKER_ARGUMENT.format(nom=nom))
 
     if nom == "git":
         verifier_git(args)
@@ -321,16 +333,50 @@ SHELL = re.compile(
     re.I,
 )
 SAISIE_INTERACTIVE = re.compile(r"^(write_stdin|write_bash|send_to_terminal|sendToTerminal)$", re.I)
-OUTIL_TODO = re.compile(r"^(TodoWrite|TodoRead|TaskCreate|TaskUpdate|update_todo|manage_todo_list)$", re.I)
 OUTIL_ECRITURE = re.compile(
     r"(edit|write|create|patch|replace|insert|delete|remove|rename|move|notebook|str_replace|"
     r"commit|push|apply|append|mkdir|copy|save|upload)",
     re.I,
 )
 
+# Liste blanche des outils qui ne font que lire, chercher, afficher ou tenir une liste de tâches
+# (le nom est comparé en minuscules, sans _ - . ni espace : get_errors = getErrors). Un outil qui
+# n'y figure pas est refusé. Les outils shell sont examinés commande par commande (SHELL).
+OUTILS_LECTURE = {
+    # Claude Code : lecture de fichiers, recherche, liste de dossiers, web en lecture, tâches,
+    # sortie d'une commande déjà lancée, skills du dépôt, question posée à l'élève
+    "Read", "Grep", "Glob", "LS", "NotebookRead", "WebFetch", "WebSearch", "TodoWrite", "TodoRead",
+    "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "BashOutput", "Skill", "AskUserQuestion",
+    # Codex : plan, image, lecture, recherche, web
+    "update_plan", "view_image", "read_file", "list_dir", "grep_files", "web_search",
+    # Copilot dans VS Code : recherche de fichiers et de texte, erreurs de compilation (lecture
+    # des problèmes), page web, fichiers modifiés (lecture de git), usages d'un symbole, sortie
+    # d'une tâche ou d'un terminal déjà lancés (lecture), liste de tâches, dépôt GitHub (recherche)
+    "file_search", "grep_search", "semantic_search", "get_errors", "fetch_webpage",
+    "get_changed_files", "list_code_usages", "get_task_output", "get_terminal_output",
+    "terminal_last_command", "terminal_selection", "get_search_view_results", "test_search",
+    "manage_todo_list", "search_workspace_symbols", "get_vscode_api", "github_repo",
+    "copilot_readFile", "copilot_listDirectory", "copilot_findFiles", "copilot_findTextInFiles",
+    "copilot_searchCodebase", "copilot_getErrors", "copilot_fetchWebPage", "copilot_listCodeUsages",
+    "copilot_getChangedFiles", "readFile", "listDirectory", "findFiles", "findTextInFiles",
+    # Copilot CLI : view, grep, glob, web_fetch, annonce d'intention, question posée à l'élève
+    "view", "grep", "glob", "web_fetch", "report_intent", "ask_user",
+    # Volontairement absents : runTests / run_tests (lance le code du dépôt, qui peut écrire),
+    # run_task, run_vscode_command, install_extension (lancent autre chose que ce que la garde voit),
+    # Task / Agent (sous-agents), outils MCP, édition, terminal (voir SHELL).
+}
+
+
+def _normaliser(nom):
+    return re.sub(r"[\s_.\-]", "", nom).lower()
+
+
+OUTILS_LECTURE_NORMALISES = {_normaliser(n) for n in OUTILS_LECTURE}
+
 # Outils qui lancent autre chose qu'une commande vue par la garde : tâches VS Code (la tâche
 # « STeaMi : sauvegarder » lance steami-sauver sans question), commandes de l'éditeur
-# (terminal.sendSequence tape dans un terminal), installation d'extensions.
+# (terminal.sendSequence tape dans un terminal), installation d'extensions. Déjà refusés par la
+# liste blanche ; ce motif ne sert qu'à donner une raison précise.
 OUTIL_EXECUTION = re.compile(
     r"(run_?(in_?)?task|create_?and_?run_?task|run_?vscode_?command|vscode_?command|"
     r"execute_?command|install_?extension|tasks?\.run|sendSequence)",
@@ -396,16 +442,19 @@ def main():
     if OUTIL_EXECUTION.search(outil):
         refuser(f"outil {outil} : il lancerait une tâche ou une commande de l'éditeur sans passer par la garde")
 
-    if not OUTIL_TODO.search(outil) and OUTIL_ECRITURE.search(outil):
-        refuser(f"outil {outil}")
-
-    commande = commande_depuis(args)
-    if SHELL.search(outil) or commande is not None:
+    if SHELL.search(outil):
         try:
-            verifier_commande(commande or "")
+            verifier_commande(commande_depuis(args) or "")
         except Refus as e:
             refuser(e.detail, e.motif)
-    sys.exit(0)
+        sys.exit(0)
+
+    if _normaliser(outil) in OUTILS_LECTURE_NORMALISES:
+        sys.exit(0)
+
+    if OUTIL_ECRITURE.search(outil):
+        refuser(f"outil {outil}")
+    refuser(f"outil {outil} inconnu de la garde : seuls les outils de lecture connus sont permis", RAISON_INCONNUE)
 
 
 if __name__ == "__main__":
