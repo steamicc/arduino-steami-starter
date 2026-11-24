@@ -286,7 +286,7 @@ def verifier_segment(mots):
     if nom in RESEAU:
         raise Refus(f"{nom} : accès réseau ou téléchargement")
 
-    if nom in ("git", "find") and any(m.joker for m in mots[1:]):
+    if nom in ("git", "find", "tail", "head") and any(m.joker for m in mots[1:]):
         raise Refus(JOKER_ARGUMENT.format(nom=nom))
 
     if nom == "git":
@@ -355,12 +355,19 @@ OUTILS_LECTURE = {
     "file_search", "grep_search", "semantic_search", "get_errors", "fetch_webpage",
     "get_changed_files", "list_code_usages", "get_task_output", "get_terminal_output",
     "terminal_last_command", "terminal_selection", "get_search_view_results", "test_search",
+    "open_file", "show_file", "search", "text_search", "search_codebase",
     "manage_todo_list", "search_workspace_symbols", "get_vscode_api", "github_repo",
     "copilot_readFile", "copilot_listDirectory", "copilot_findFiles", "copilot_findTextInFiles",
     "copilot_searchCodebase", "copilot_getErrors", "copilot_fetchWebPage", "copilot_listCodeUsages",
     "copilot_getChangedFiles", "readFile", "listDirectory", "findFiles", "findTextInFiles",
     # Copilot CLI : view, grep, glob, web_fetch, annonce d'intention, question posée à l'élève
     "view", "grep", "glob", "web_fetch", "report_intent", "ask_user",
+    # update_todo : liste de tâches du CLI, n'écrit rien dans le dépôt. read_bash : lit la sortie
+    # d'un bash asynchrone dont la commande a déjà passé par la garde (comme BashOutput).
+    "update_todo", "read_bash",
+    # Claude Code : ToolSearch charge seulement les schémas d'outils différés (chaque appel d'outil
+    # reste soumis à la garde) ; ExitPlanMode demande à l'élève d'approuver un plan, sans rien écrire.
+    "ToolSearch", "ExitPlanMode",
     # Volontairement absents : runTests / run_tests (lance le code du dépôt, qui peut écrire),
     # run_task, run_vscode_command, install_extension (lancent autre chose que ce que la garde voit),
     # Task / Agent (sous-agents), outils MCP, édition, terminal (voir SHELL).
@@ -384,15 +391,10 @@ OUTIL_EXECUTION = re.compile(
 )
 
 
-def commande_depuis(args):
-    """Texte de la commande shell, ou None si l'outil n'en porte pas."""
-    brut = None
-    for cle in ("command", "cmd", "commandLine"):
-        if args.get(cle) not in (None, ""):
-            brut = args[cle]
-            break
-    if brut is None:
-        return None
+CLES_COMMANDE = ("command", "cmd", "commandLine", "script")
+
+
+def _texte_commande(brut):
     if isinstance(brut, list):
         # Codex : ["bash", "-lc", "cat x"] ou ["cat", "x"]
         mots = [str(m) for m in brut]
@@ -400,6 +402,19 @@ def commande_depuis(args):
             return mots[-1]
         return " ".join(m if re.fullmatch(r"[\w@%+=:,./-]+", m) else "'" + m.replace("'", "'\\''") + "'" for m in mots)
     return str(brut)
+
+
+def commandes_depuis(args):
+    """Textes de toutes les commandes shell portées par l'outil (une par clé présente : command,
+    cmd, commandLine, script), sans doublon. Les analyser toutes évite qu'une clé inoffensive
+    masque une autre que l'outil exécuterait."""
+    textes = []
+    for cle in CLES_COMMANDE:
+        if args.get(cle) not in (None, ""):
+            t = _texte_commande(args[cle])
+            if t not in textes:
+                textes.append(t)
+    return textes
 
 
 def main():
@@ -444,7 +459,10 @@ def main():
 
     if SHELL.search(outil):
         try:
-            verifier_commande(commande_depuis(args) or "")
+            commandes = commandes_depuis(args)
+            if len(commandes) > 1:
+                raise Refus("plusieurs commandes différentes dans la même requête : une seule est permise")
+            verifier_commande(commandes[0] if commandes else "")
         except Refus as e:
             refuser(e.detail, e.motif)
         sys.exit(0)
