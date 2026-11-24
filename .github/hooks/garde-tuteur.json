@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "python3 -I \"$(git rev-parse --show-toplevel)/.agents/garde-tuteur.py\"",
+        "command": "python3 -I \"$(git rev-parse --show-toplevel)/.agents/garde-tuteur.py\"",
+        "timeoutSec": 15
+      }
+    ]
+  }
+}
