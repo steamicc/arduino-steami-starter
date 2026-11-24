@@ -7,7 +7,7 @@
         "steami-exemples": true,
         "steami-compiler": true,
         "steami-televerser": true,
-        "/^git\\s+(status|log|diff)\\b(?!.*(--o(?!neline\\b)|[{}]))/": true,
+        "/^git\\s+(status|log|diff)\\b(?!.*(--o(?!neline\\b)|[{}*?\\[]))/": true,
         "steami-sauver": false,
         "steami-copier": false,
         "/^git\\s+(add|commit|push|pull|checkout|restore|reset|clean|stash|rebase|merge|tag|rm|mv)\\b/": false,

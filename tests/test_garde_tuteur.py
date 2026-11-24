@@ -77,8 +77,11 @@ class OutilsEcriture(GardeTestCase):
         "manage_todo_list", "search_workspace_symbols", "get_vscode_api", "github_repo",
         "copilot_readFile", "copilot_listDirectory", "copilot_findFiles", "copilot_findTextInFiles",
         "copilot_searchCodebase", "copilot_getErrors", "copilot_fetchWebPage", "getErrors", "readFile",
+        "open_file", "show_file", "search", "text_search", "search_codebase",
         # Copilot CLI
-        "view", "grep", "glob", "web_fetch", "report_intent", "ask_user",
+        "view", "grep", "glob", "web_fetch", "report_intent", "ask_user", "update_todo", "read_bash",
+        # Claude Code (chargement de schémas d'outils différés, sortie du mode plan)
+        "ToolSearch", "ExitPlanMode",
     ]
 
     def test_outils_de_lecture_autorises(self):
@@ -123,6 +126,8 @@ class CommandesRefusees(GardeTestCase):
         "git -c core.pager=x log", "git -C /tmp commit -m x", "git branch nouvelle",
         "git status && git commit -m x", "git diff --output=src/main.cpp",
         "git log --output=x", "git show --output=x HEAD", "git diff --outp=x",
+        # jokers non protégés : un fichier nommé -f ou --output=x deviendrait une option
+        "tail *", "tail -n 2 *.md", "head *", "head -n 3 *.md", "tail ?", "head [a-z]*",
         # suppression, copie, déplacement
         "rm src/main.cpp", "rm -rf src", "/usr/bin/rm src/main.cpp", "/bin/rm x",
         "\\rm x", "r''m x", '"rm" x', "mv a b", "cp a b", "ln -s a b", "touch x", "mkdir d",
@@ -234,7 +239,8 @@ class CommandesAutorisees(GardeTestCase):
         "git status && git diff", "git log --oneline | head -5", "steami-exemples | grep -i led",
         "cat README.md || echo introuvable", "echo bonjour", 'echo "a > b"', "echo 'rm x'",
         "grep -n 'rm ' README.md", 'grep -rn "git commit" .', "cat 'fichier avec espaces.txt'",
-        "ls *.md", "cat src/*.cpp", "head -n 3 *.md", "grep -n x src/*.cpp", "wc -l *.md", "tail -n 2 *.md",
+        "ls *.md", "cat src/*.cpp", "grep -n x src/*.cpp", "wc -l *.md",
+        "head -n 3 '*.md'", "tail -n 2 README.md", "head -n 3 src/main.cpp",
         "find . -name '*.cpp'", "find . -name \"*.h\"", "git diff -- 'src/*.cpp'", "git ls-files '*.cpp'",
         "git log -- src/\\*.cpp", "ls src/\\{a,b\\}", "echo '{a,b}'", 'grep "{" src/main.cpp',
     ]
@@ -264,6 +270,21 @@ class CommandesAutorisees(GardeTestCase):
             with self.subTest(outil=nom):
                 self.assertAutorise({"tool_name": nom, "tool_input": {"command": "git status"}})
                 self.assertRefuse({"tool_name": nom, "tool_input": {"command": "rm x"}})
+
+    def test_plusieurs_cles_de_commande_toutes_analysees(self):
+        # la garde lisait seulement la première clé non vide : la seconde passait sans examen
+        for cle in ["cmd", "commandLine", "script"]:
+            with self.subTest(cle=cle):
+                self.assertRefuse({"tool_name": "Bash", "tool_input": {"command": "ls", cle: "rm x"}})
+                self.assertRefuse({"tool_name": "Bash", "tool_input": {"command": "rm x", cle: "ls"}})
+                self.assertRefuse({"toolName": "bash", "toolArgs": {"command": "ls", cle: "rm x"}})
+                self.assertRefuse({"toolName": "bash", "toolArgs": json.dumps({"command": "ls", cle: "rm x"})})
+                # valeurs différentes, même si les deux sont permises : ambigu, donc refusé
+                self.assertRefuse({"tool_name": "Bash", "tool_input": {"command": "ls", cle: "pwd"}})
+        self.assertRefuse({"tool_name": "Bash", "tool_input": {"command": ["ls"], "cmd": "rm x"}})
+        # la même commande répétée sous plusieurs clés reste permise
+        self.assertAutorise({"tool_name": "Bash", "tool_input": {"command": "ls", "cmd": "ls"}})
+        self.assertAutorise({"toolName": "bash", "toolArgs": {"command": "ls", "commandLine": "ls"}})
 
     def test_exec_command_avec_cmd(self):
         self.assertRefuse({"tool_name": "exec_command", "tool_input": {"cmd": "rm x"}})
@@ -372,7 +393,8 @@ class ConfigurationDesAgents(unittest.TestCase):
         for commande in ["git status", "git log --oneline -n 5", "git diff --stat", "git diff src/main.cpp"]:
             self.assertTrue(motif.search(commande), commande)
         for commande in ["git diff --output=x", "git diff --outp=x", "git log --output x",
-                         "git diff --{output=x,stat}", "git show", "git commit -m x"]:
+                         "git diff --{output=x,stat}", "git show", "git commit -m x",
+                         "git diff *", "git diff -- *", "git log ?", "git diff src/[a]*.cpp"]:
             self.assertFalse(motif.search(commande), commande)
 
     def test_deny_claude_couvre_les_ecritures(self):
