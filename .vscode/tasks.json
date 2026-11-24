@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "STeaMi : compiler",
+      "type": "shell",
+      "command": "steami-compiler",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "STeaMi : compiler un exemple",
+      "type": "shell",
+      "command": "steami-compiler ${input:exemple}",
+      "problemMatcher": []
+    },
+    {
+      "label": "STeaMi : copier un exemple",
+      "type": "shell",
+      "command": "steami-copier ${input:exemple}",
+      "problemMatcher": []
+    },
+    {
+      "label": "STeaMi : téléverser",
+      "type": "shell",
+      "command": "steami-televerser",
+      "problemMatcher": []
+    },
+    {
+      "label": "STeaMi : sauvegarder",
+      "type": "shell",
+      "command": "steami-sauver",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "exemple",
+      "type": "promptString",
+      "description": "Exemple (driver/Exemple), la liste est donnée par steami-exemples",
+      "default": "lis2mdl/BasicReader"
+    }
+  ]
+}

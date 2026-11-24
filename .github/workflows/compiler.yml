@@ -1,0 +1,21 @@
+name: compiler
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compiler:
+    # Sans cette condition, chaque dépôt d'élève (créé depuis ce modèle)
+    # recevrait un courriel d'échec à chaque sauvegarde d'un programme en cours.
+    if: github.repository == 'steamicc/arduino-steami-starter'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/steamicc/arduino-steami-devcontainer:2026.11.1
+      options: --user vscode
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compiler le programme
+        run: steami-compiler
+      - name: Vérifier le binaire
+        run: test -s .steami/firmware.bin
