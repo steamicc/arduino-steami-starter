@@ -11,7 +11,7 @@ jobs:
     if: github.repository == 'steamicc/arduino-steami-starter'
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/steamicc/arduino-steami-devcontainer:2026.11.3
+      image: ghcr.io/steamicc/arduino-steami-devcontainer:2026.11.4
     steps:
       - uses: actions/checkout@v4
       - name: Tester la garde du tuteur IA
