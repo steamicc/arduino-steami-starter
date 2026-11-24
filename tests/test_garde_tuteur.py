@@ -68,6 +68,14 @@ class OutilsEcriture(GardeTestCase):
             with self.subTest(outil=nom):
                 self.assertAutorise({"tool_name": nom, "tool_input": {"file_path": "src/main.cpp"}})
 
+    def test_outils_qui_lancent_une_tache_ou_une_commande_de_l_editeur_refuses(self):
+        # la tâche VS Code « STeaMi : sauvegarder » lance steami-sauver sans question
+        for nom in ["run_task", "create_and_run_task", "run_vscode_command", "install_extension",
+                    "runTask", "run_in_task"]:
+            with self.subTest(outil=nom):
+                self.assertRefuse({"toolName": nom, "toolArgs": {"id": "shell: STeaMi : sauvegarder"}})
+                self.assertRefuse({"tool_name": nom, "tool_input": {"command": "workbench.action.terminal.sendSequence"}})
+
     def test_saisie_dans_un_programme_interactif_refusee(self):
         self.assertRefuse({"tool_name": "write_stdin", "tool_input": {"session_id": 1, "chars": "rm x\n"}})
         self.assertAutorise({"tool_name": "write_stdin", "tool_input": {"session_id": 1}})
@@ -128,6 +136,10 @@ class CommandesRefusees(GardeTestCase):
         "ls |& tee x", "ls >& out", "echo x >&out", "=rm x", "r\\\nm x", "ls >!x", "ls >x",
         "ls; >x", ";;rm x", "ls \\\n| rm x", "/usr/bin/../bin/rm x", "/tmp/rm x", "/usr/bin/env rm x",
         "/usr/bin/find . -delete", "echo hi |& tee /tmp/x", "tail --follow=name x", "tail -nf x",
+        # développement des accolades : fabrique des options que la garde ne voit pas
+        "git diff --{output=src/main.cpp,stat}", "git log --{output=x,oneline}",
+        "find src -name main.cpp -{delete,print}", "git diff --{out,}put=x", "ls src/{a,b}",
+        "echo {a,b}", "cat {x,y}", "git show HEAD}",
     ]
 
     def test_refus_format_claude(self):
@@ -187,7 +199,7 @@ class CommandesAutorisees(GardeTestCase):
         "git status && git diff", "git log --oneline | head -5", "steami-exemples | grep -i led",
         "cat README.md || echo introuvable", "echo bonjour", 'echo "a > b"', "echo 'rm x'",
         "grep -n 'rm ' README.md", 'grep -rn "git commit" .', "cat 'fichier avec espaces.txt'",
-        "ls *.md", "cat src/*.cpp", "ls src/{a,b}",
+        "ls *.md", "cat src/*.cpp", "ls src/\\{a,b\\}", "echo '{a,b}'", 'grep "{" src/main.cpp',
     ]
 
     def test_autorisees_format_claude(self):
