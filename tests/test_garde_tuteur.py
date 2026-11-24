@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -62,11 +63,39 @@ class OutilsEcriture(GardeTestCase):
                 self.assertRefuse({"tool_name": nom, "tool_input": {"file_path": "src/main.cpp"}})
                 self.assertRefuse({"toolName": nom, "toolArgs": {"filePath": "src/main.cpp"}})
 
+    # Liste blanche : chaque outil ci-dessous lit sans rien écrire (voir OUTILS_LECTURE dans la garde).
+    OUTILS_LECTURE = [
+        # Claude Code
+        "Read", "Grep", "Glob", "LS", "NotebookRead", "WebFetch", "WebSearch", "TodoWrite", "TodoRead",
+        "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "BashOutput", "Skill", "AskUserQuestion",
+        # Codex
+        "update_plan", "view_image", "read_file", "list_dir", "grep_files", "web_search",
+        # Copilot dans VS Code
+        "file_search", "grep_search", "semantic_search", "get_errors", "fetch_webpage",
+        "get_changed_files", "list_code_usages", "get_task_output", "get_terminal_output",
+        "terminal_last_command", "terminal_selection", "get_search_view_results", "test_search",
+        "manage_todo_list", "search_workspace_symbols", "get_vscode_api", "github_repo",
+        "copilot_readFile", "copilot_listDirectory", "copilot_findFiles", "copilot_findTextInFiles",
+        "copilot_searchCodebase", "copilot_getErrors", "copilot_fetchWebPage", "getErrors", "readFile",
+        # Copilot CLI
+        "view", "grep", "glob", "web_fetch", "report_intent", "ask_user",
+    ]
+
     def test_outils_de_lecture_autorises(self):
-        for nom in ["Read", "Grep", "Glob", "read_file", "list_dir", "grep_search",
-                    "file_search", "semantic_search", "TodoWrite", "manage_todo_list", "TaskCreate", "TaskUpdate"]:
+        for nom in self.OUTILS_LECTURE:
             with self.subTest(outil=nom):
                 self.assertAutorise({"tool_name": nom, "tool_input": {"file_path": "src/main.cpp"}})
+                self.assertAutorise({"toolName": nom, "toolArgs": {"path": "src/main.cpp"}})
+
+    def test_outil_inconnu_refuse(self):
+        # liste blanche : ce que la garde ne connaît pas est refusé, même sans argument
+        for nom in ["vscode_runCommand", "runCommand", "executeTask", "runTests", "run_tests",
+                    "mcp__serveur__outil", "Task", "Agent", "KillShell", "MonOutil", "get_errors2",
+                    "ReadAndWrite", "format_document", "run_notebook_cell", "open_simple_browser"]:
+            with self.subTest(outil=nom):
+                self.assertRefuse({"tool_name": nom, "tool_input": {}}, "outil")
+                self.assertRefuse({"toolName": nom, "toolArgs": {"x": 1}}, "outil")
+        self.assertRefuse({"tool_name": "MonTerminal", "tool_input": {"command": "ls"}})
 
     def test_outils_qui_lancent_une_tache_ou_une_commande_de_l_editeur_refuses(self):
         # la tâche VS Code « STeaMi : sauvegarder » lance steami-sauver sans question
@@ -140,6 +169,12 @@ class CommandesRefusees(GardeTestCase):
         "git diff --{output=src/main.cpp,stat}", "git log --{output=x,oneline}",
         "find src -name main.cpp -{delete,print}", "git diff --{out,}put=x", "ls src/{a,b}",
         "echo {a,b}", "cat {x,y}", "git show HEAD}",
+        # joker non protégé dans find et git : un fichier nommé « -delete » ou « --output=x »
+        # deviendrait une option
+        "find . -name x *", "find . ?delete", "find . [-]delete", "find * -name x",
+        "git diff --stat *", "git diff -- *.cpp", "git log src/*", "git show HEAD:src/?.cpp",
+        "git diff [-]-output=x", "git ls-files *.cpp", "git status ?",
+        "ls | find . -name x *",
     ]
 
     def test_refus_format_claude(self):
@@ -199,7 +234,9 @@ class CommandesAutorisees(GardeTestCase):
         "git status && git diff", "git log --oneline | head -5", "steami-exemples | grep -i led",
         "cat README.md || echo introuvable", "echo bonjour", 'echo "a > b"', "echo 'rm x'",
         "grep -n 'rm ' README.md", 'grep -rn "git commit" .', "cat 'fichier avec espaces.txt'",
-        "ls *.md", "cat src/*.cpp", "ls src/\\{a,b\\}", "echo '{a,b}'", 'grep "{" src/main.cpp',
+        "ls *.md", "cat src/*.cpp", "head -n 3 *.md", "grep -n x src/*.cpp", "wc -l *.md", "tail -n 2 *.md",
+        "find . -name '*.cpp'", "find . -name \"*.h\"", "git diff -- 'src/*.cpp'", "git ls-files '*.cpp'",
+        "git log -- src/\\*.cpp", "ls src/\\{a,b\\}", "echo '{a,b}'", 'grep "{" src/main.cpp',
     ]
 
     def test_autorisees_format_claude(self):
@@ -228,10 +265,9 @@ class CommandesAutorisees(GardeTestCase):
                 self.assertAutorise({"tool_name": nom, "tool_input": {"command": "git status"}})
                 self.assertRefuse({"tool_name": nom, "tool_input": {"command": "rm x"}})
 
-    def test_outil_inconnu_avec_une_commande_est_traite_comme_un_shell(self):
-        self.assertRefuse({"tool_name": "MonTerminal", "tool_input": {"command": "rm x"}})
-        self.assertAutorise({"tool_name": "MonTerminal", "tool_input": {"command": "ls"}})
+    def test_exec_command_avec_cmd(self):
         self.assertRefuse({"tool_name": "exec_command", "tool_input": {"cmd": "rm x"}})
+        self.assertAutorise({"tool_name": "exec_command", "tool_input": {"cmd": "ls"}})
 
     def test_codex_commande_en_tableau(self):
         self.assertAutorise({"tool_name": "shell", "tool_input": {"command": ["bash", "-lc", "git status"]}})
@@ -254,10 +290,45 @@ class Sortie(GardeTestCase):
         self.assertEqual(decision["permissionDecision"], "deny")
         self.assertEqual(decision["permissionDecisionReason"], err.strip())
 
-    def test_aucune_ecriture_dans_le_depot(self):
-        avant = sorted(p.name for p in RACINE.iterdir())
-        lancer(bash("echo x > fichier-de-test-garde"))
-        self.assertEqual(sorted(p.name for p in RACINE.iterdir()), avant)
+
+class AucuneEcriture(GardeTestCase):
+    def test_commandes_autorisees_n_ecrivent_rien(self):
+        """Exécute pour de vrai, dans un dépôt temporaire, chaque commande que la garde autorise
+        (batterie CommandesAutorisees) et vérifie qu'aucun fichier n'a été créé, modifié ou supprimé."""
+        with tempfile.TemporaryDirectory() as tmp:
+            depot = Path(tmp) / "depot"
+            (depot / "src").mkdir(parents=True)
+            (depot / "src" / "main.cpp").write_text("void setup() {}\nvoid loop() {}\n", encoding="utf-8")
+            (depot / "README.md").write_text("# test\n", encoding="utf-8")
+            (depot / "fichier avec espaces.txt").write_text("x\n", encoding="utf-8")
+            # faux programmes steami-* : les vrais (image du devcontainer) compilent ou téléversent
+            faux = Path(tmp) / "faux"
+            faux.mkdir()
+            for nom in ("steami-exemples", "steami-compiler", "steami-televerser"):
+                (faux / nom).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                (faux / nom).chmod(0o755)
+            env = {"PATH": f"{faux}:/usr/bin:/bin", "HOME": tmp, "GIT_PAGER": "cat", "PAGER": "cat",
+                   "GIT_CONFIG_NOSYSTEM": "1", "LC_ALL": "C.UTF-8"}
+            git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.org"]
+            for c in (["init", "-q"], ["add", "."], ["commit", "-q", "-m", "init"]):
+                subprocess.run(git + c, cwd=depot, env=env, check=True, capture_output=True)
+
+            def instantane():
+                return {
+                    str(p.relative_to(depot)): (p.read_bytes() if p.is_file() else None)
+                    for p in sorted(depot.rglob("*")) if ".git" not in p.relative_to(depot).parts
+                }
+
+            avant = instantane()
+            for commande in CommandesAutorisees.AUTORISEES:
+                with self.subTest(commande=commande):
+                    self.assertAutorise({"tool_name": "Bash", "tool_input": {"command": commande}, "cwd": str(depot)})
+                    subprocess.run(["bash", "-c", commande], cwd=depot, env=env, stdin=subprocess.DEVNULL,
+                                   capture_output=True, timeout=20)
+            self.assertEqual(instantane(), avant, "un fichier a été créé, modifié ou supprimé")
+            statut = subprocess.run(git + ["status", "--porcelain"], cwd=depot, env=env,
+                                    capture_output=True, text=True, check=True).stdout
+            self.assertEqual(statut, "", "le dépôt temporaire n'est plus propre")
 
 
 class SynchronisationDuTutorat(unittest.TestCase):
