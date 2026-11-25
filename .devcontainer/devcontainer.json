@@ -1,6 +1,6 @@
 {
   "name": "STeaMi Arduino",
-  "image": "ghcr.io/steamicc/arduino-steami-devcontainer:2026.11.6",
+  "image": "ghcr.io/steamicc/arduino-steami-devcontainer:2026.11.7",
   "hostRequirements": { "cpus": 2 },
   "forwardPorts": [8080],
   "portsAttributes": { "8080": { "label": "Téléverser", "onAutoForward": "notify" } },
