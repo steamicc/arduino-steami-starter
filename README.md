@@ -25,7 +25,7 @@ Dans **votre** nouveau dépôt : **Code** → onglet **Codespaces** → **Create
 | `steami-televerser` | prépare l'envoi du programme vers la carte |
 | `steami-sauver ["message"]` | sauvegarde votre travail sur GitHub |
 
-Les drivers et les exemples sont **les mêmes que dans l'Arduino IDE** (Fichier → Exemples → STeaMi) : c'est la bibliothèque `STeaMi`, qu'on inclut par `#include <STeaMi.h>` ou par composant (`#include <LIS2MDL.h>`). Les sources des exemples sont dans `/opt/steami/libs/STeaMi/examples/<COMPOSANT>/<Exemple>/<Exemple>.ino`. Les noms ne tiennent pas compte de la casse : `steami-compiler lis2mdl/basicreader` fonctionne aussi.
+Les drivers et les exemples sont **les mêmes que dans l'Arduino IDE** (Fichier → Exemples → STeaMi) : c'est la bibliothèque `STeaMi`, qu'on inclut par `#include <STeaMi.h>` ou par composant (`#include <SteamiLIS2MDL.h>` pour la classe `SteamiLIS2MDL`). Les sources des exemples sont dans `/opt/steami/libs/STeaMi/examples/<COMPOSANT>/<Exemple>/<Exemple>.ino`. Les noms ne tiennent pas compte de la casse : `steami-compiler lis2mdl/basicreader` fonctionne aussi.
 
 Ces actions existent aussi dans le menu **Terminal** → **Run Task…** (« STeaMi : compiler », etc.).
 
