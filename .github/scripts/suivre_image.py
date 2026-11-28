@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
-"""Compare la version de l'image du modèle au dernier tag publié.
+"""Décisions du robot suivre-image, testées dans tests/test_suivre_image.py.
 
-Usage : suivre_image.py FICHIER_DEVCONTAINER < sortie de « git ls-remote --tags »
-Affiche la version (AAAA.MM.N) du dernier tag si elle est plus récente que
-celle de l'image du modèle, sinon n'affiche rien. Code de sortie 0 dans les
-deux cas ; 1 si le fichier ne contient pas d'image reconnue.
+suivre_image.py FICHIER_DEVCONTAINER < sortie de « git ls-remote --tags »
+    Affiche la version (AAAA.MM.N) du dernier tag si elle est plus récente que
+    celle de l'image du modèle, sinon n'affiche rien. Code de sortie 0 dans les
+    deux cas ; 1 si le fichier ne contient pas d'image reconnue.
+
+suivre_image.py depassees BRANCHE SLUG < JSON de « gh pr list --json number,headRefName,isCrossRepository,author »
+    Numéros (un par ligne) des PR à fermer : branche chore/image-* de ce dépôt,
+    ouverte par l'App SLUG, autre que BRANCHE. La liste est lue sans --author
+    (l'index de recherche retarde) : le filtre sur l'auteur se fait ici.
+
+suivre_image.py robot SLUG [CLE] < JSON de commits de l'API REST
+    Affiche « robot » si tous les commits (au moins un) ont l'App SLUG pour
+    auteur et pour committer, sinon « humain ». L'entrée est une liste de
+    commits (pages de « gh api --paginate .../pulls/N/commits ») ou, avec CLE,
+    un objet dont CLE contient la liste (« commits » pour .../compare/A...B).
+    Code de sortie 1 si l'entrée n'est pas du JSON.
 """
 import json
 import re
@@ -45,7 +57,78 @@ def plus_recente(actuelle, derniere):
     return None
 
 
+PREFIXE_BRANCHE = "chore/image-"
+
+
+def auteurs_du_robot(slug):
+    """Logins de l'App SLUG : « app/SLUG » (gh pr list) et « SLUG[bot] » (API REST)."""
+    return {"app/" + slug, slug + "[bot]"}
+
+
+def prs_depassees(prs, branche, slug):
+    """PR ouvertes du robot pour une autre image que `branche` (jamais une PR de fork)."""
+    robot = auteurs_du_robot(slug)
+    return [
+        pr["number"]
+        for pr in prs
+        if not pr.get("isCrossRepository", True)
+        and pr.get("headRefName", "").startswith(PREFIXE_BRANCHE)
+        and pr.get("headRefName") != branche
+        and ((pr.get("author") or {}).get("login") in robot)
+    ]
+
+
+def commits_du_robot(commits, slug):
+    """Vrai si chaque commit (au moins un) a l'App pour auteur et pour committer."""
+    bot = slug + "[bot]"
+
+    def login(commit, role):
+        return (commit.get(role) or {}).get("login")
+
+    return bool(commits) and all(login(c, "author") == bot and login(c, "committer") == bot for c in commits)
+
+
+def lire_flux_json(texte, cle=None):
+    """Valeurs JSON concaténées (pages de « gh api --paginate ») mises bout à bout."""
+    decodeur = json.JSONDecoder()
+    valeurs = []
+    position = 0
+    while True:
+        while position < len(texte) and texte[position].isspace():
+            position += 1
+        if position == len(texte):
+            return valeurs
+        valeur, position = decodeur.raw_decode(texte, position)
+        if cle is not None:
+            valeur = valeur[cle]
+        valeurs.extend(valeur if isinstance(valeur, list) else [valeur])
+
+
+def commande(argv):
+    """Sous-commandes « depassees » et « robot » ; None si argv n'en est pas une."""
+    if len(argv) == 4 and argv[1] == "depassees":
+        prs = lire_flux_json(sys.stdin.read())
+        for numero in prs_depassees(prs, argv[2], argv[3]):
+            print(numero)
+        return 0
+    if len(argv) in (3, 4) and argv[1] == "robot":
+        commits = lire_flux_json(sys.stdin.read(), argv[3] if len(argv) == 4 else None)
+        print("robot" if commits_du_robot(commits, argv[2]) else "humain")
+        return 0
+    return None
+
+
 def main(argv):
+    if len(argv) > 1 and argv[1] in ("depassees", "robot"):
+        try:
+            code = commande(argv)
+        except (ValueError, KeyError, TypeError, AttributeError) as erreur:
+            print("✗ JSON inattendu : " + str(erreur), file=sys.stderr)
+            return 1
+        if code is not None:
+            return code
+        print(__doc__, file=sys.stderr)
+        return 2
     if len(argv) != 2:
         print(__doc__, file=sys.stderr)
         return 2

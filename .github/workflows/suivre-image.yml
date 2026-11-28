@@ -1,3 +1,46 @@
+# =====================================================================
+# suivre-image.yml : garde à jour l'image du Codespace du modèle.
+#
+# Ce qui est épinglé : la ligne « image » de .devcontainer/devcontainer.json
+# (ghcr.io/steamicc/arduino-steami-devcontainer:AAAA.MM.N). C'est la seule
+# source de la version : compiler.yml la lit pour compiler dans la même image.
+#
+# Déclencheurs :
+#   - une fois par jour à 06:47 UTC (cron « 47 6 * * * »), en filet ;
+#   - à la demande (workflow_dispatch, onglet Actions) ;
+#   - après chaque publication de l'image : le job « aval » de
+#     devcontainer-publish.yml (steamicc/arduino-steami-devcontainer) lance ce
+#     workflow par workflow_dispatch dès que le tag devcontainer-AAAA.MM.N est
+#     publié. Relancer ce workflow à la main ne relance rien en amont.
+#
+# Déroulé : le workflow lit le dernier tag devcontainer-AAAA.MM.N. S'il est
+# plus récent que l'image épinglée et que l'image est publiée sur ghcr.io :
+#   - PR du robot déjà ouverte sur chore/image-AAAA.MM.N : seule sa fusion
+#     automatique est vérifiée ;
+#   - PR fermée ou fusionnée pour cette branche, ou ouverte par une autre
+#     personne : rien n'est refait pour cette version ;
+#   - branche chore/image-AAAA.MM.N sans PR (une ouverture de PR ratée) : si
+#     tous ses commits sont du robot, la PR est ouverte dessus ; sinon un
+#     avertissement demande de la traiter à la main ;
+#   - sinon : branche, commit et PR « chore: passer à l'image AAAA.MM.N ».
+# Les autres PR ouvertes du robot (chore/image-*) sont ensuite fermées avec
+# « Superseded by #N. ». Leur branche est supprimée, sauf si elle porte un
+# commit qui n'est pas du robot.
+#
+# Fusion automatique : la garde commune .github/scripts/garde-fusion-auto.sh
+# (copie à l'identique, vérifiée par tests/test_garde_fusion_auto.py) l'active
+# en squash si le check « compiler » est exigé sur la branche par défaut et si
+# l'App ne peut pas contourner ce ruleset. Elle relance une fois un « compiler »
+# rouge, puis fait échouer ce workflow. Pour garder une PR ouverte (fusion à la
+# main), la passer en brouillon ou lui mettre l'étiquette « garder-ouverte ».
+#
+# Les écritures (push, PR, fermeture, fusion, relance) passent par le jeton de
+# l'App de l'organisation (secrets RELEASE_APP_ID et RELEASE_APP_SECRET),
+# limité à ce dépôt : une PR ouverte avec lui déclenche « compiler », ce que
+# GITHUB_TOKEN ne permet pas. GITHUB_TOKEN ne sert qu'aux lectures.
+#
+# Neutralisé dans les dépôts d'élèves créés depuis ce modèle.
+# =====================================================================
 name: suivre-image
 
 on:
@@ -31,8 +74,12 @@ jobs:
         with:
           client-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_SECRET }}
+          owner: steamicc
+          repositories: arduino-steami-starter
           permission-contents: write
           permission-pull-requests: write
+          # La garde relance une fois un « compiler » rouge (gh run rerun).
+          permission-actions: write
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.repository.default_branch }}
@@ -41,6 +88,7 @@ jobs:
         id: image
         env:
           APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          DEFAUT: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           nouvelle=$(git ls-remote --tags https://github.com/steamicc/arduino-steami-devcontainer.git 'refs/tags/devcontainer-*' \
@@ -49,10 +97,39 @@ jobs:
           if [ -z "$nouvelle" ]; then echo "Image à jour."; exit 0; fi
           branche="chore/image-$nouvelle"
           echo "branche=$branche" >> "$GITHUB_OUTPUT"
-          if git ls-remote --exit-code --heads origin "$branche" >/dev/null 2>&1 \
-            || [ -n "$(gh pr list --head "$branche" --state all --json number,author,isCrossRepository --jq '.[] | select((.isCrossRepository | not) and .author.login == "app/'"$APP_SLUG"'") | .number')" ]; then
-            echo "La branche ou la PR $branche existe déjà."
-            echo "deja=oui" >> "$GITHUB_OUTPUT"
+          # PR du robot déjà ouverte (branche de ce dépôt, ouverte par l'App).
+          pr=$(gh pr list --head "$branche" --state open --json number,author,isCrossRepository \
+            --jq '[.[] | select((.isCrossRepository | not) and .author.login == "app/'"$APP_SLUG"'") | .number] | first // empty')
+          if [ -n "$pr" ]; then
+            echo "La PR #$pr ($branche) du robot est déjà ouverte : vérification de sa fusion automatique."
+            printf 'action=existante\npr=%s\n' "$pr" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # PR fermée ou fusionnée, ou ouverte par quelqu'un d'autre : on ne recommence pas.
+          if [ -n "$(gh pr list --head "$branche" --state all --json number,isCrossRepository --jq '.[] | select(.isCrossRepository | not) | .number')" ]; then
+            echo "::notice::une PR $branche existe déjà (fermée, fusionnée, ou ouverte par une autre personne que le robot) : rien n'est refait pour cette version."
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$branche" >/dev/null; then
+            :
+          else
+            code=$?
+            if [ "$code" != 2 ]; then
+              echo "::error::lecture des branches impossible (git ls-remote, code $code)"
+              exit 1
+            fi
+            echo "action=nouvelle" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Branche sans PR : une ouverture de PR a échoué après le push. On
+          # ouvre la PR dessus seulement si personne d'autre n'y a poussé.
+          auteurs=$(gh api "repos/$GH_REPO/compare/$DEFAUT...$branche" \
+            | python3 .github/scripts/suivre_image.py robot "$APP_SLUG" commits)
+          if [ "$auteurs" = robot ]; then
+            echo "La branche $branche existe sans PR et ne porte que des commits du robot : la PR est ouverte dessus."
+            echo "action=branche" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::la branche $branche existe sans PR, mais elle porte des commits qui ne sont pas du robot (ou aucun commit d'avance sur $DEFAUT) : ouvrir la PR ou supprimer la branche à la main."
           fi
       - name: Vérifier que l'image est publiée
         id: publiee
@@ -72,68 +149,81 @@ jobs:
             exit 1
           fi
       - name: Ouvrir la PR
-        if: steps.publiee.outputs.publiee == 'oui' && steps.image.outputs.deja != 'oui'
+        id: ouvrir
+        if: steps.publiee.outputs.publiee == 'oui' && (steps.image.outputs.action == 'nouvelle' || steps.image.outputs.action == 'branche')
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          ACTION: ${{ steps.image.outputs.action }}
+          DEFAUT: ${{ github.event.repository.default_branch }}
           NOUVELLE: ${{ steps.image.outputs.nouvelle }}
           BRANCHE: ${{ steps.image.outputs.branche }}
           APP_SLUG: ${{ steps.app.outputs.app-slug }}
         run: |
           set -euo pipefail
-          sed -i -E "s#(arduino-steami-devcontainer:)[0-9]{4}\.[0-9]{2}\.[0-9]+#\1$NOUVELLE#" .devcontainer/devcontainer.json
-          git diff --quiet && { echo "✗ rien à modifier"; exit 1; }
-          id_bot=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${id_bot}+${APP_SLUG}[bot]@users.noreply.github.com"
-          git switch -c "$BRANCHE"
-          git commit -am "chore: passer à l'image $NOUVELLE"
-          git push origin "$BRANCHE"
-          gh pr create --base "${{ github.event.repository.default_branch }}" --head "$BRANCHE" \
+          if [ "$ACTION" = nouvelle ]; then
+            sed -i -E "s#(arduino-steami-devcontainer:)[0-9]{4}\.[0-9]{2}\.[0-9]+#\1$NOUVELLE#" .devcontainer/devcontainer.json
+            git diff --quiet && { echo "✗ rien à modifier"; exit 1; }
+            id_bot=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+            git config user.name "${APP_SLUG}[bot]"
+            git config user.email "${id_bot}+${APP_SLUG}[bot]@users.noreply.github.com"
+            git switch -c "$BRANCHE"
+            git commit -am "chore: passer à l'image $NOUVELLE"
+            git push origin "$BRANCHE"
+          fi
+          url=$(gh pr create --base "$DEFAUT" --head "$BRANCHE" \
             --title "chore: passer à l'image $NOUVELLE" \
             --body "Nouvelle image du Codespace : [devcontainer-$NOUVELLE](https://github.com/steamicc/arduino-steami-devcontainer/releases/tag/devcontainer-$NOUVELLE) (\`ghcr.io/steamicc/arduino-steami-devcontainer:$NOUVELLE\`).
 
           Le workflow \`compiler\` (qui lit la version dans \`.devcontainer/devcontainer.json\`) vérifie cette branche. La PR se fusionne seule dès qu'il est vert.
 
-          À vérifier avant de fusionner : \`platformio.ini\` doit rester identique à \`.devcontainer/source/amorcage/platformio.ini\` de l'image (le copier si besoin)."
+          À vérifier avant de fusionner : \`platformio.ini\` doit rester identique à \`.devcontainer/source/amorcage/platformio.ini\` de l'image (le copier si besoin).")
+          numero=${url##*/}
+          if ! [[ "$numero" =~ ^[0-9]+$ ]]; then
+            echo "::error::numéro de la PR introuvable dans « $url »"
+            exit 1
+          fi
+          echo "PR #$numero ouverte : $url"
+          echo "pr=$numero" >> "$GITHUB_OUTPUT"
+      # Une PR d'une image plus ancienne réécrit la même ligne « image » : une
+      # fois l'une fusionnée, l'autre serait en conflit pour toujours. Seules les
+      # PR de l'App, dans ce dépôt, dont la branche est chore/image-*, sont fermées.
+      - name: Fermer les PR dépassées
+        if: steps.publiee.outputs.publiee == 'oui' && (steps.ouvrir.outputs.pr != '' || steps.image.outputs.pr != '')
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          BRANCHE: ${{ steps.image.outputs.branche }}
+          PR: ${{ steps.ouvrir.outputs.pr || steps.image.outputs.pr }}
+        run: |
+          set -euo pipefail
+          # Liste sans recherche (pas de filtre d'auteur côté gh) : l'index de
+          # recherche retarde sur la création de la PR, faite quelques secondes
+          # plus tôt. Le filtre sur l'auteur se fait dans suivre_image.py.
+          anciennes=$(gh pr list --state open --limit 200 --json number,headRefName,isCrossRepository,author \
+            | python3 .github/scripts/suivre_image.py depassees "$BRANCHE" "$APP_SLUG")
+          for n in $anciennes; do
+            auteurs=$(gh api "repos/$GH_REPO/pulls/$n/commits" --paginate \
+              | python3 .github/scripts/suivre_image.py robot "$APP_SLUG")
+            if [ "$auteurs" = robot ]; then
+              echo "Fermeture de la PR #$n (image dépassée)."
+              gh pr close "$n" --delete-branch --comment "Superseded by #$PR."
+            else
+              echo "::warning::fermeture de la PR #$n (image dépassée) : sa branche porte des commits qui ne sont pas du robot, elle est gardée."
+              gh pr close "$n" --comment "Superseded by #$PR. La branche est gardée : elle porte des commits qui ne sont pas du robot."
+            fi
+          done
       - name: Activer la fusion automatique
         if: steps.publiee.outputs.publiee == 'oui'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          BRANCHE: ${{ steps.image.outputs.branche }}
           APP_SLUG: ${{ steps.app.outputs.app-slug }}
-          DEFAUT: ${{ github.event.repository.default_branch }}
+          PR: ${{ steps.ouvrir.outputs.pr || steps.image.outputs.pr }}
         run: |
           set -euo pipefail
-          # Seule la PR du robot, venue de ce dépôt, est concernée (jamais une PR de fork).
-          # Liste sans recherche (pas de --author) : l'index de recherche retarde
-          # sur la création de la PR, faite quelques secondes plus tôt.
-          num=$(gh pr list --head "$BRANCHE" --state open --json number,author,isCrossRepository \
-            --jq '[.[] | select((.isCrossRepository | not) and .author.login == "app/'"$APP_SLUG"'") | .number] | first // empty')
-          if [ -z "$num" ]; then
-            echo "::warning::aucune PR ouverte du robot pour $BRANCHE : à fusionner à la main"
+          if [ -z "$PR" ]; then
+            echo "Aucune PR ouverte du robot pour cette image : rien à fusionner."
             exit 0
           fi
-          exigee=$(gh api "repos/$GH_REPO/rules/branches/$DEFAUT" \
-            --jq '[.[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context] | index("compiler") != null')
-          if [ "$exigee" != "true" ]; then
-            echo "::warning::le check « compiler » n'est pas exigé sur $DEFAUT : la PR #$num est à fusionner à la main"
-            exit 0
-          fi
-          # Défense en profondeur : si l'App peut contourner la règle, la fusion
-          # automatique n'attendrait pas « compiler ».
-          # Seuls les rulesets qui exigent un check comptent : l'App contourne
-          # légitimement le ruleset d'organisation (suppression, historique).
-          ids=$(gh api "repos/$GH_REPO/rules/branches/$DEFAUT" \
-            --jq '[.[] | select(.type=="required_status_checks") | .ruleset_id] | unique | .[]')
-          if [ -z "$ids" ]; then
-            echo "::warning::aucun ruleset n'exige de check sur $DEFAUT : la PR #$num est à fusionner à la main"
-            exit 0
-          fi
-          for id in $ids; do
-            peut=$(gh api "repos/$GH_REPO/rulesets/$id" --jq '.current_user_can_bypass // "inconnu"')
-            if [ "$peut" != "never" ]; then
-              echo "::warning::l'App peut contourner le ruleset $id ($peut) : fusion automatique refusée, la PR #$num est à fusionner à la main"
-              exit 0
-            fi
-          done
-          gh pr merge "$num" --auto --squash
+          # Garde commune des robots steamicc : fork, auteur, check exigé,
+          # contournement, brouillon ou « garder-ouverte », relance d'un check rouge.
+          bash .github/scripts/garde-fusion-auto.sh "$GITHUB_REPOSITORY" "$PR" "$APP_SLUG" compiler
