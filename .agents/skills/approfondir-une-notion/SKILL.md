@@ -46,6 +46,8 @@ Demande s'il veut vérifier qu'il a compris avec un quiz. S'il accepte, suis la 
 | LED RGB, boutons A, B et MENU, buzzer | https://wiki.steami.cc/docs/software/arduino/premiers-programmes |
 | `Serial` et la console série | https://wiki.steami.cc/docs/software/arduino/premiers-programmes |
 | `#include`, bibliothèques et drivers STeaMi | https://wiki.steami.cc/docs/software/arduino/bibliotheques |
-| Capteurs et écran | https://wiki.steami.cc/docs/software/arduino/capteurs |
+| Capteurs et microphone | https://wiki.steami.cc/docs/software/arduino/capteurs |
+| Écran : `SteamiDisplay`, `SteamiScreen`, widgets, `SteamiHistory` | https://wiki.steami.cc/docs/software/arduino/ecran |
+| Microphone : `SteamiIMP34DT05` | https://wiki.steami.cc/docs/software/arduino/exemples/imp34dt05 |
 | Compiler, téléverser, Codespace | https://wiki.steami.cc/docs/software/arduino/codespace |
 | Référence du langage Arduino | https://docs.arduino.cc/language-reference/ |
