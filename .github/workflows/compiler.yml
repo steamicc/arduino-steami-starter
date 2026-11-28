@@ -33,14 +33,24 @@ jobs:
           echo "etiquette=$etiquette" >> "$GITHUB_OUTPUT"
   compiler:
     needs: image
-    # Sans « always », un job « image » en échec ferait sauter « compiler »,
-    # et un check obligatoire sauté compte comme réussi. Ici l'étiquette est
-    # vide, le conteneur ne démarre pas et « compiler » échoue.
-    if: ${{ !cancelled() }}
+    # Un check obligatoire sauté compte comme réussi : « compiler » tourne donc
+    # même si « image » échoue, et échoue alors explicitement (première étape).
+    # Le dépôt modèle seulement : les dépôts d'élèves sautent « image » comme
+    # « compiler ».
+    if: ${{ !cancelled() && github.repository == 'steamicc/arduino-steami-starter' }}
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/steamicc/arduino-steami-devcontainer:${{ needs.image.outputs.etiquette }}
+      # Image minimale quand « image » a échoué, pour que la première étape
+      # puisse rapporter l'erreur.
+      image: ${{ needs.image.result == 'success' && format('ghcr.io/steamicc/arduino-steami-devcontainer:{0}', needs.image.outputs.etiquette) || 'alpine:3.20' }}
     steps:
+      - name: Exiger que « image » ait réussi
+        if: needs.image.result != 'success'
+        env:
+          RESULTAT: ${{ needs.image.result }}
+        run: |
+          echo "::error::le job « image » n'a pas réussi ($RESULTAT) : rien n'est compilé"
+          exit 1
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Tester la garde du tuteur IA
         run: python3 -m unittest discover -s tests -p 'test_*.py'
