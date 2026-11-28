@@ -50,7 +50,7 @@ jobs:
           branche="chore/image-$nouvelle"
           echo "branche=$branche" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code --heads origin "$branche" >/dev/null 2>&1 \
-            || [ -n "$(gh pr list --head "$branche" --author "app/$APP_SLUG" --state all --json number,isCrossRepository --jq '.[] | select(.isCrossRepository | not) | .number')" ]; then
+            || [ -n "$(gh pr list --head "$branche" --state all --json number,author,isCrossRepository --jq '.[] | select((.isCrossRepository | not) and .author.login == "app/'"$APP_SLUG"'") | .number')" ]; then
             echo "La branche ou la PR $branche existe déjà."
             echo "deja=oui" >> "$GITHUB_OUTPUT"
           fi
@@ -105,10 +105,12 @@ jobs:
         run: |
           set -euo pipefail
           # Seule la PR du robot, venue de ce dépôt, est concernée (jamais une PR de fork).
-          num=$(gh pr list --head "$BRANCHE" --author "app/$APP_SLUG" --state open \
-            --json number,isCrossRepository --jq '[.[] | select(.isCrossRepository | not) | .number] | first // empty')
+          # Liste sans recherche (pas de --author) : l'index de recherche retarde
+          # sur la création de la PR, faite quelques secondes plus tôt.
+          num=$(gh pr list --head "$BRANCHE" --state open --json number,author,isCrossRepository \
+            --jq '[.[] | select((.isCrossRepository | not) and .author.login == "app/'"$APP_SLUG"'") | .number] | first // empty')
           if [ -z "$num" ]; then
-            echo "Aucune PR du robot ouverte pour $BRANCHE."
+            echo "::warning::aucune PR ouverte du robot pour $BRANCHE : à fusionner à la main"
             exit 0
           fi
           exigee=$(gh api "repos/$GH_REPO/rules/branches/$DEFAUT" \
@@ -121,8 +123,8 @@ jobs:
           # automatique n'attendrait pas « compiler ».
           for id in $(gh api "repos/$GH_REPO/rules/branches/$DEFAUT" --jq '[.[].ruleset_id] | unique | .[]'); do
             peut=$(gh api "repos/$GH_REPO/rulesets/$id" --jq '.current_user_can_bypass // "inconnu"')
-            if [ "$peut" = "always" ]; then
-              echo "::warning::l'App peut contourner le ruleset $id : fusion automatique refusée, la PR #$num est à fusionner à la main"
+            if [ "$peut" != "never" ]; then
+              echo "::warning::l'App peut contourner le ruleset $id ($peut) : fusion automatique refusée, la PR #$num est à fusionner à la main"
               exit 0
             fi
           done
