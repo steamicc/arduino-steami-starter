@@ -2,10 +2,14 @@ name: compiler
 
 on:
   push:
+    branches: [main]
   pull_request:
-  # Nécessaire au suivi automatique des images : une PR ouverte avec
-  # GITHUB_TOKEN ne déclenche pas « pull_request ».
+  # Gardé pour les lancements à la main.
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -21,8 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       # Une seule source pour la version de l'image : .devcontainer/devcontainer.json
-      # (le suivi automatique ne modifie que ce fichier : GITHUB_TOKEN ne peut pas
-      # modifier un fichier de workflow).
+      # (le suivi automatique ne modifie que ce fichier).
       - id: lire
         run: |
           etiquette=$(python3 -c 'import json; print(json.load(open(".devcontainer/devcontainer.json"))["image"].rsplit(":", 1)[1])')
@@ -30,6 +33,10 @@ jobs:
           echo "etiquette=$etiquette" >> "$GITHUB_OUTPUT"
   compiler:
     needs: image
+    # Sans « always », un job « image » en échec ferait sauter « compiler »,
+    # et un check obligatoire sauté compte comme réussi. Ici l'étiquette est
+    # vide, le conteneur ne démarre pas et « compiler » échoue.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/steamicc/arduino-steami-devcontainer:${{ needs.image.outputs.etiquette }}

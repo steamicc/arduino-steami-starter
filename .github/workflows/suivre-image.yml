@@ -2,14 +2,18 @@ name: suivre-image
 
 on:
   schedule:
-    - cron: "17 5 * * *"
+    - cron: "47 6 * * *"
   workflow_dispatch:
 
-# Le minimum pour pousser une branche, ouvrir la PR et lancer « compiler ».
+# Le jeton du workflow ne sert qu'à lire : la branche et la PR sont ouvertes
+# par l'App (jeton « app » ci-dessous), ce qui déclenche « compiler ».
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: suivre-image
+  cancel-in-progress: false
 
 jobs:
   suivre:
@@ -19,10 +23,20 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
     steps:
+      - name: Jeton de l'App
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_SECRET }}
+          permission-contents: write
+          permission-pull-requests: write
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.repository.default_branch }}
+          token: ${{ steps.app.outputs.token }}
       - name: Chercher une image plus récente
         id: image
         run: |
@@ -38,17 +52,37 @@ jobs:
             echo "La branche ou la PR $branche existe déjà."
             echo "deja=oui" >> "$GITHUB_OUTPUT"
           fi
-      - name: Ouvrir la PR
-        if: steps.image.outputs.nouvelle != '' && steps.image.outputs.deja != 'oui'
+      - name: Vérifier que l'image est publiée
+        id: publiee
+        if: steps.image.outputs.nouvelle != ''
         env:
           NOUVELLE: ${{ steps.image.outputs.nouvelle }}
+        run: |
+          set -euo pipefail
+          sortie="$RUNNER_TEMP/sortie"
+          if docker manifest inspect "ghcr.io/steamicc/arduino-steami-devcontainer:$NOUVELLE" >/dev/null 2>"$sortie"; then
+            echo "publiee=oui" >> "$GITHUB_OUTPUT"
+          elif grep -qiE "manifest unknown|name unknown" "$sortie"; then
+            echo "::notice::image $NOUVELLE pas encore publiée : le prochain lancement ouvrira la PR"
+            echo "publiee=non" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::registre illisible : $(cat "$sortie")"
+            exit 1
+          fi
+      - name: Ouvrir la PR
+        if: steps.publiee.outputs.publiee == 'oui' && steps.image.outputs.deja != 'oui'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          NOUVELLE: ${{ steps.image.outputs.nouvelle }}
           BRANCHE: ${{ steps.image.outputs.branche }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
         run: |
           set -euo pipefail
           sed -i -E "s#(arduino-steami-devcontainer:)[0-9]{4}\.[0-9]{2}\.[0-9]+#\1$NOUVELLE#" .devcontainer/devcontainer.json
           git diff --quiet && { echo "✗ rien à modifier"; exit 1; }
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          id_bot=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${id_bot}+${APP_SLUG}[bot]@users.noreply.github.com"
           git switch -c "$BRANCHE"
           git commit -am "chore: passer à l'image $NOUVELLE"
           git push origin "$BRANCHE"
@@ -56,7 +90,24 @@ jobs:
             --title "chore: passer à l'image $NOUVELLE" \
             --body "Nouvelle image du Codespace : [devcontainer-$NOUVELLE](https://github.com/steamicc/arduino-steami-devcontainer/releases/tag/devcontainer-$NOUVELLE) (\`ghcr.io/steamicc/arduino-steami-devcontainer:$NOUVELLE\`).
 
-          Le workflow \`compiler\` (qui lit la version dans \`.devcontainer/devcontainer.json\`) est lancé sur cette branche : attendez qu'il soit vert.
+          Le workflow \`compiler\` (qui lit la version dans \`.devcontainer/devcontainer.json\`) vérifie cette branche. La PR se fusionne seule dès qu'il est vert.
 
           À vérifier avant de fusionner : \`platformio.ini\` doit rester identique à \`.devcontainer/source/amorcage/platformio.ini\` de l'image (le copier si besoin)."
-          gh workflow run compiler.yml --ref "$BRANCHE"
+      - name: Activer la fusion automatique
+        if: steps.publiee.outputs.publiee == 'oui'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BRANCHE: ${{ steps.image.outputs.branche }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(gh pr list --head "$BRANCHE" --state open --json number --jq '.[].number')" ]; then
+            echo "Aucune PR ouverte pour $BRANCHE."
+            exit 0
+          fi
+          exigee=$(gh api "repos/$GH_REPO/rules/branches/main" \
+            --jq '[.[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context] | index("compiler") != null')
+          if [ "$exigee" = "true" ]; then
+            gh pr merge "$BRANCHE" --auto --squash
+          else
+            echo "::warning::le check « compiler » n'est pas exigé sur main : la PR $BRANCHE est à fusionner à la main"
+          fi
