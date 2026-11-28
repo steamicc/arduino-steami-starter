@@ -58,3 +58,5 @@ Les tests de la garde et de la synchronisation des instructions : `python3 -m un
 ## Aller plus loin
 
 Documentation complète : <https://wiki.steami.cc/docs/software/arduino/codespace>
+
+<!-- mesure CI -->
