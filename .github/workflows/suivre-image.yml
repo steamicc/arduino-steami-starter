@@ -121,7 +121,15 @@ jobs:
           fi
           # Défense en profondeur : si l'App peut contourner la règle, la fusion
           # automatique n'attendrait pas « compiler ».
-          for id in $(gh api "repos/$GH_REPO/rules/branches/$DEFAUT" --jq '[.[].ruleset_id] | unique | .[]'); do
+          # Seuls les rulesets qui exigent un check comptent : l'App contourne
+          # légitimement le ruleset d'organisation (suppression, historique).
+          ids=$(gh api "repos/$GH_REPO/rules/branches/$DEFAUT" \
+            --jq '[.[] | select(.type=="required_status_checks") | .ruleset_id] | unique | .[]')
+          if [ -z "$ids" ]; then
+            echo "::warning::aucun ruleset n'exige de check sur $DEFAUT : la PR #$num est à fusionner à la main"
+            exit 0
+          fi
+          for id in $ids; do
             peut=$(gh api "repos/$GH_REPO/rulesets/$id" --jq '.current_user_can_bypass // "inconnu"')
             if [ "$peut" != "never" ]; then
               echo "::warning::l'App peut contourner le ruleset $id ($peut) : fusion automatique refusée, la PR #$num est à fusionner à la main"
