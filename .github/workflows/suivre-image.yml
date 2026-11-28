@@ -39,6 +39,8 @@ jobs:
           token: ${{ steps.app.outputs.token }}
       - name: Chercher une image plus récente
         id: image
+        env:
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
         run: |
           set -euo pipefail
           nouvelle=$(git ls-remote --tags https://github.com/steamicc/arduino-steami-devcontainer.git 'refs/tags/devcontainer-*' \
@@ -48,7 +50,7 @@ jobs:
           branche="chore/image-$nouvelle"
           echo "branche=$branche" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code --heads origin "$branche" >/dev/null 2>&1 \
-            || [ -n "$(gh pr list --head "$branche" --state all --json number --jq '.[].number')" ]; then
+            || [ -n "$(gh pr list --head "$branche" --author "app/$APP_SLUG" --state all --json number,isCrossRepository --jq '.[] | select(.isCrossRepository | not) | .number')" ]; then
             echo "La branche ou la PR $branche existe déjà."
             echo "deja=oui" >> "$GITHUB_OUTPUT"
           fi
@@ -98,16 +100,30 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           BRANCHE: ${{ steps.image.outputs.branche }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          DEFAUT: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          if [ -z "$(gh pr list --head "$BRANCHE" --state open --json number --jq '.[].number')" ]; then
-            echo "Aucune PR ouverte pour $BRANCHE."
+          # Seule la PR du robot, venue de ce dépôt, est concernée (jamais une PR de fork).
+          num=$(gh pr list --head "$BRANCHE" --author "app/$APP_SLUG" --state open \
+            --json number,isCrossRepository --jq '[.[] | select(.isCrossRepository | not) | .number] | first // empty')
+          if [ -z "$num" ]; then
+            echo "Aucune PR du robot ouverte pour $BRANCHE."
             exit 0
           fi
-          exigee=$(gh api "repos/$GH_REPO/rules/branches/main" \
+          exigee=$(gh api "repos/$GH_REPO/rules/branches/$DEFAUT" \
             --jq '[.[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context] | index("compiler") != null')
-          if [ "$exigee" = "true" ]; then
-            gh pr merge "$BRANCHE" --auto --squash
-          else
-            echo "::warning::le check « compiler » n'est pas exigé sur main : la PR $BRANCHE est à fusionner à la main"
+          if [ "$exigee" != "true" ]; then
+            echo "::warning::le check « compiler » n'est pas exigé sur $DEFAUT : la PR #$num est à fusionner à la main"
+            exit 0
           fi
+          # Défense en profondeur : si l'App peut contourner la règle, la fusion
+          # automatique n'attendrait pas « compiler ».
+          for id in $(gh api "repos/$GH_REPO/rules/branches/$DEFAUT" --jq '[.[].ruleset_id] | unique | .[]'); do
+            peut=$(gh api "repos/$GH_REPO/rulesets/$id" --jq '.current_user_can_bypass // "inconnu"')
+            if [ "$peut" = "always" ]; then
+              echo "::warning::l'App peut contourner le ruleset $id : fusion automatique refusée, la PR #$num est à fusionner à la main"
+              exit 0
+            fi
+          done
+          gh pr merge "$num" --auto --squash
