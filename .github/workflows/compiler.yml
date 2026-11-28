@@ -34,10 +34,12 @@ jobs:
   compiler:
     needs: image
     # Un check obligatoire sauté compte comme réussi : « compiler » tourne donc
-    # même si « image » échoue, et échoue alors explicitement (première étape).
+    # même si « image » échoue ou est annulé, et échoue alors explicitement
+    # (première étape) : always() et non !cancelled(), sinon une annulation
+    # pendant « image » sauterait « compiler » et laisserait passer la PR.
     # Le dépôt modèle seulement : les dépôts d'élèves sautent « image » comme
     # « compiler ».
-    if: ${{ !cancelled() && github.repository == 'steamicc/arduino-steami-starter' }}
+    if: ${{ always() && github.repository == 'steamicc/arduino-steami-starter' }}
     runs-on: ubuntu-latest
     container:
       # Image minimale quand « image » a échoué, pour que la première étape
